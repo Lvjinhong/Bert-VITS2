@@ -178,3 +178,9 @@ asr_transcript.py
 extract_list.py
 /Data
 Data/*
+./configs
+*.bin
+Model/
+raw/
+dataset/
+

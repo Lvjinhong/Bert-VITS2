@@ -1,32 +1,9 @@
-# Bert-VITS2
+->进行标注（若已标注就跳过）-->预处理得到转录文件.list-->resample进行重采样 此时会得到dataset数据集
+—>preprocess_text.py得到.clean文件(字符？) 以及划分训练集和数据集(同时会更新config文件中的spk2id键值，存储对应的人物信息)，—>—> bert_gen在每个人物语音数据集文件夹中生成pt文件 
+—> train_ms.py生成总的混合模型（结合底模进行微调）
 
-VITS2 Backbone with bert
-
-## 请注意，本项目核心思路来源于[anyvoiceai/MassTTS](https://github.com/anyvoiceai/MassTTS) 一个非常好的tts项目
-## MassTTS的演示demo为[ai版峰哥锐评峰哥本人,并找回了在金三角失落的腰子](https://www.bilibili.com/video/BV1w24y1c7z9)
-
-[//]: # (## 本项目与[PlayVoice/vits_chinese]&#40;https://github.com/PlayVoice/vits_chinese&#41; 没有任何关系)
-
-[//]: # ()
-[//]: # (本仓库来源于之前朋友分享了ai峰哥的视频，本人被其中的效果惊艳，在自己尝试MassTTS以后发现fs在音质方面与vits有一定差距，并且training的pipeline比vits更复杂，因此按照其思路将bert)
-
-## 成熟的旅行者/开拓者/舰长/博士/sensei/猎魔人/喵喵露/V应当参阅代码自己学习如何训练。
-
-### 严禁将此项目用于一切违反《中华人民共和国宪法》，《中华人民共和国刑法》，《中华人民共和国治安管理处罚法》和《中华人民共和国民法典》之用途。
-### 严禁用于任何政治相关用途。
-#### Video:https://www.bilibili.com/video/BV1hp4y1K78E
-#### Demo:https://www.bilibili.com/video/BV1TF411k78w
-## References
-+ [anyvoiceai/MassTTS](https://github.com/anyvoiceai/MassTTS)
-+ [jaywalnut310/vits](https://github.com/jaywalnut310/vits)
-+ [p0p4k/vits2_pytorch](https://github.com/p0p4k/vits2_pytorch)
-+ [svc-develop-team/so-vits-svc](https://github.com/svc-develop-team/so-vits-svc)
-+ [PaddlePaddle/PaddleSpeech](https://github.com/PaddlePaddle/PaddleSpeech)
-+ [emotional-vits](https://github.com/innnky/emotional-vits)
-+ [Bert-VITS2-en](https://github.com/xwan07017/Bert-VITS2-en)
-## 感谢所有贡献者作出的努力
-<a href="https://github.com/fishaudio/Bert-VITS2/graphs/contributors" target="_blank">
-  <img src="https://contrib.rocks/image?repo=fishaudio/Bert-VITS2"/>
-</a>
-
-[//]: # (# 本项目所有代码引用均已写明，bert部分代码思路来源于[AI峰哥]&#40;https://www.bilibili.com/video/BV1w24y1c7z9&#41;，与[vits_chinese]&#40;https://github.com/PlayVoice/vits_chinese&#41;无任何关系。欢迎各位查阅代码。同时，我们也对该开发者的[碰瓷，乃至开盒开发者的行为]&#40;https://www.bilibili.com/read/cv27101514/&#41;表示强烈谴责。)
+- 路径变了之后 需要改config.json 以及bert_gen.py之前的文件
+- clean_raw 是为了整理列表和wav文件的，在这之前可以标注()完了之后 用clean_list去做个清理
+- rename clean_list clean_raw 文件需要指定路径
+- 注意python bert_gen.py 前要确保config中的train路径正确
+- 训练混合角色模型时 数据集物理位置不需要变，只需要集成list即可（raw_list改完，重新clean raw一下 ，手动清洗(可选)，然后继续preprocess text ）

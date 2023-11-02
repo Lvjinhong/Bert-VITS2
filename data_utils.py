@@ -308,7 +308,8 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
         self.lengths = dataset.lengths
         self.batch_size = batch_size
         self.boundaries = boundaries
-
+        #buckets中存放的是每个bucket中的样本的index，num_samples_per_bucket中存放的是每个bucket中的样本的数量 
+        #每个桶的样本数一定是batchsize的整数倍，目前buckets还是存放的实际数据的索引，可能后面iter的时候会重复填充（如果不够整数倍的话）
         self.buckets, self.num_samples_per_bucket = self._create_buckets()
         self.total_size = sum(self.num_samples_per_bucket)
         self.num_samples = self.total_size // self.num_replicas
@@ -320,7 +321,11 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
             idx_bucket = self._bisect(length)
             if idx_bucket != -1:
                 buckets[idx_bucket].append(i)
-
+        """
+        这部分代码的目的是移除那些没有样本的桶。它首先尝试从后向前遍历桶列表，并检查每个桶是否为空。
+        如果一个桶是空的，它就从buckets和self.boundaries中移除它。
+        然后，它使用assert语句确保所有的桶都不是空的。如果有任何空的桶，它会引发一个异常，并进入except块，再次尝试移除空的桶。
+        """
         try:
             for i in range(len(buckets) - 1, 0, -1):
                 if len(buckets[i]) == 0:
@@ -334,7 +339,12 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
                 if len(buckets[i]) == 0:
                     buckets.pop(i)
                     self.boundaries.pop(i + 1)
-
+        """
+        它计算每个桶中的样本数量。为了确保每个桶中的样本数量是batch_size的整数倍，它可能需要添加一些额外的样本。
+        这是通过计算rem来实现的，它表示为了使桶的大小是batch_size的整数倍所需的额外样本数量。
+        然后，它将桶的原始大小和rem相加，得到每个桶的总样本数量
+        total_batch_size 计算了所有卡上的总批次大小，同时rem那里保证了 总样本数 是 total_batch_size 的整数倍 
+        """
         num_samples_per_bucket = []
         for i in range(len(buckets)):
             len_bucket = len(buckets[i])
@@ -375,10 +385,10 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
                 + ids_bucket[: (rem % len_bucket)]
             )
 
-            # subsample
+            # subsample 划分子集 到每张卡上
             ids_bucket = ids_bucket[self.rank :: self.num_replicas]
 
-            # batching
+            # 对子集进行按照batchsize进行划分 
             for j in range(len(ids_bucket) // self.batch_size):
                 batch = [
                     bucket[idx]
