@@ -1,7 +1,9 @@
 # flake8: noqa: E402
 import os
 import logging
+
 import re_matching
+from tools.sentence import split_by_language, sentence_split
 
 logging.getLogger("numba").setLevel(logging.WARNING)
 logging.getLogger("markdown_it").setLevel(logging.WARNING)
@@ -38,11 +40,15 @@ def generate_audio(
     length_scale,
     speaker,
     language,
+    skip_start=False,
+    skip_end=False,
 ):
     audio_list = []
-    silence = np.zeros(hps.data.sampling_rate // 2, dtype=np.int16)
+    # silence = np.zeros(hps.data.sampling_rate // 2, dtype=np.int16)
     with torch.no_grad():
-        for piece in slices:
+        for idx, piece in enumerate(slices):
+            skip_start = (idx != 0) and skip_start
+            skip_end = (idx != len(slices) - 1) and skip_end
             audio = infer(
                 piece,
                 sdp_ratio=sdp_ratio,
@@ -54,10 +60,12 @@ def generate_audio(
                 hps=hps,
                 net_g=net_g,
                 device=device,
+                skip_start=skip_start,
+                skip_end=skip_end,
             )
             audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
             audio_list.append(audio16bit)
-            audio_list.append(silence)  # 将静音添加到列表中
+            # audio_list.append(silence)  # 将静音添加到列表中
     return audio_list
 
 
@@ -80,7 +88,9 @@ def tts_split(
     para_list = re_matching.cut_para(text)
     audio_list = []
     if not cut_by_sent:
-        for p in para_list:
+        for idx, p in enumerate(para_list):
+            skip_start = idx != 0
+            skip_end = idx != len(para_list) - 1
             audio = infer(
                 p,
                 sdp_ratio=sdp_ratio,
@@ -92,16 +102,22 @@ def tts_split(
                 hps=hps,
                 net_g=net_g,
                 device=device,
+                skip_start=skip_start,
+                skip_end=skip_end,
             )
             audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
             audio_list.append(audio16bit)
             silence = np.zeros((int)(44100 * interval_between_para), dtype=np.int16)
             audio_list.append(silence)
     else:
-        for p in para_list:
+        for idx, p in enumerate(para_list):
+            skip_start = idx != 0
+            skip_end = idx != len(para_list) - 1
             audio_list_sent = []
             sent_list = re_matching.cut_sent(p)
-            for s in sent_list:
+            for idx, s in enumerate(sent_list):
+                skip_start = (idx != 0) and skip_start
+                skip_end = (idx != len(sent_list) - 1) and skip_end
                 audio = infer(
                     s,
                     sdp_ratio=sdp_ratio,
@@ -113,6 +129,8 @@ def tts_split(
                     hps=hps,
                     net_g=net_g,
                     device=device,
+                    skip_start=skip_start,
+                    skip_end=skip_end,
                 )
                 audio_list_sent.append(audio)
                 silence = np.zeros((int)(44100 * interval_between_sent))
@@ -148,9 +166,13 @@ def tts_fn(
                 np.concatenate([np.zeros(hps.data.sampling_rate // 2)]),
             )
         result = re_matching.text_matching(text)
-        for one in result:
+        for idx, one in enumerate(result):
+            skip_start = idx != 0
+            skip_end = idx != len(result) - 1
             _speaker = one.pop()
-            for lang, content in one:
+            for idx, (lang, content) in enumerate(one):
+                skip_start = (idx != 0) and skip_start
+                skip_end = (idx != len(one) - 1) and skip_end
                 audio_list.extend(
                     generate_audio(
                         content.split("|"),
@@ -160,6 +182,33 @@ def tts_fn(
                         length_scale,
                         _speaker,
                         lang,
+                        skip_start,
+                        skip_end,
+                    )
+                )
+    elif language.lower() == "auto":
+        sentences_list = split_by_language(text, target_languages=["zh", "ja", "en"])
+        for idx, (sentences, lang) in enumerate(sentences_list):
+            skip_start = idx != 0
+            skip_end = idx != len(sentences_list) - 1
+            lang = lang.upper()
+            if lang == "JA":
+                lang = "JP"
+            sentences = sentence_split(sentences, max=250)
+            for idx, content in enumerate(sentences):
+                skip_start = (idx != 0) and skip_start
+                skip_end = (idx != len(sentences) - 1) and skip_end
+                audio_list.extend(
+                    generate_audio(
+                        content.split("|"),
+                        sdp_ratio,
+                        noise_scale,
+                        noise_scale_w,
+                        length_scale,
+                        speaker,
+                        lang,
+                        skip_start,
+                        skip_end,
                     )
                 )
     else:
@@ -191,7 +240,7 @@ if __name__ == "__main__":
     )
     speaker_ids = hps.data.spk2id
     speakers = list(speaker_ids.keys())
-    languages = ["ZH", "JP", "EN", "mix"]
+    languages = ["ZH", "JP", "EN", "mix", "auto"]
     with gr.Blocks() as app:
         with gr.Row():
             with gr.Column():

@@ -85,22 +85,22 @@ def get_text(text, language_str, hps, device):
         for i in range(len(word2ph)):
             word2ph[i] = word2ph[i] * 2
         word2ph[0] += 1
-    bert = get_bert(norm_text, word2ph, language_str, device)
+    bert_ori = get_bert(norm_text, word2ph, language_str, device)
     del word2ph
-    assert bert.shape[-1] == len(phone), phone
+    assert bert_ori.shape[-1] == len(phone), phone
 
     if language_str == "ZH":
-        bert = bert
+        bert = bert_ori
         ja_bert = torch.zeros(1024, len(phone))
         en_bert = torch.zeros(1024, len(phone))
     elif language_str == "JP":
         bert = torch.zeros(1024, len(phone))
-        ja_bert = bert
+        ja_bert = bert_ori
         en_bert = torch.zeros(1024, len(phone))
     elif language_str == "EN":
         bert = torch.zeros(1024, len(phone))
         ja_bert = torch.zeros(1024, len(phone))
-        en_bert = bert
+        en_bert = bert_ori
     else:
         raise ValueError("language_str should be ZH, JP or EN")
 
@@ -125,6 +125,8 @@ def infer(
     hps,
     net_g,
     device,
+    skip_start=False,
+    skip_end=False,
 ):
     # 支持中日双语版本
     inferMap_V2 = {
@@ -172,6 +174,20 @@ def infer(
     bert, ja_bert, en_bert, phones, tones, lang_ids = get_text(
         text, language, hps, device
     )
+    if skip_start:
+        phones = phones[1:]
+        tones = tones[1:]
+        lang_ids = lang_ids[1:]
+        bert = bert[:, 1:]
+        ja_bert = ja_bert[:, 1:]
+        en_bert = en_bert[:, 1:]
+    if skip_end:
+        phones = phones[:-1]
+        tones = tones[:-1]
+        lang_ids = lang_ids[:-1]
+        bert = bert[:, :-1]
+        ja_bert = ja_bert[:, :-1]
+        en_bert = en_bert[:, :-1]
     with torch.no_grad():
         x_tst = phones.to(device).unsqueeze(0)
         tones = tones.to(device).unsqueeze(0)
@@ -201,6 +217,7 @@ def infer(
             .float()
             .numpy()
         )
-        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers
-        torch.cuda.empty_cache()
+        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers, ja_bert, en_bert
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         return audio
