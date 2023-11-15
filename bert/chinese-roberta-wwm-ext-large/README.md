@@ -1,9 +1,5 @@
 ---
-<<<<<<< HEAD
-language: 
-=======
 language:
->>>>>>> a047def663e5323e534b337b071ebe2c6f87c59e
 - zh
 tags:
 - bert
@@ -13,15 +9,9 @@ license: "apache-2.0"
 # Please use 'Bert' related functions to load this model!
 
 ## Chinese BERT with Whole Word Masking
-<<<<<<< HEAD
 For further accelerating Chinese natural language processing, we provide **Chinese pre-trained BERT with Whole Word Masking**. 
 
 **[Pre-Training with Whole Word Masking for Chinese BERT](https://arxiv.org/abs/1906.08101)**  
-=======
-For further accelerating Chinese natural language processing, we provide **Chinese pre-trained BERT with Whole Word Masking**.
-
-**[Pre-Training with Whole Word Masking for Chinese BERT](https://arxiv.org/abs/1906.08101)**
->>>>>>> a047def663e5323e534b337b071ebe2c6f87c59e
 Yiming Cui, Wanxiang Che, Ting Liu, Bing Qin, Ziqing Yang, Shijin Wang, Guoping Hu
 
 This repository is developed based on：https://github.com/google-research/bert
@@ -56,11 +46,7 @@ If you find the technical report or resource is useful, please cite the followin
     pages = "657--668",
 }
 ```
-<<<<<<< HEAD
-- Secondary: https://arxiv.org/abs/1906.08101  
-=======
 - Secondary: https://arxiv.org/abs/1906.08101
->>>>>>> a047def663e5323e534b337b071ebe2c6f87c59e
 ```
 @article{chinese-bert-wwm,
   title={Pre-Training with Whole Word Masking for Chinese BERT},
@@ -68,8 +54,4 @@ If you find the technical report or resource is useful, please cite the followin
   journal={arXiv preprint arXiv:1906.08101},
   year={2019}
  }
-<<<<<<< HEAD
 ```
-=======
-```
->>>>>>> a047def663e5323e534b337b071ebe2c6f87c59e

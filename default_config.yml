@@ -6,9 +6,22 @@
 # 不填或者填空则路径为相对于项目根目录的路径
 dataset_path: "Data/"
 
+
 # 模型镜像源，默认huggingface，使用openi镜像源需指定openi_token
 mirror: ""
 openi_token: ""  # openi token
+
+#mypreprocess 自定义预处理配置
+mypreprocess:
+  #autoLable 自动标注配置
+  autoLable:
+    in_dir: "raw/bakimix"
+    out_file: "bakimix"
+    character_name: "filelists/bakiMix/raw_bakiMix.list"
+  clean_raw:
+    list_path: "filelists/baTeacher/raw_baTeacher.list"
+    final_list_path: "filelists/baTeacher/baTeacher.list"
+
 
 # resample 音频重采样配置
 # 注意， “:” 后需要加空格

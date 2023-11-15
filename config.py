@@ -9,6 +9,20 @@ import shutil
 import sys
 
 
+class DynamicConfig:
+    def __init__(self, config_data: dict, parent_key: str = ""):
+        for key, value in config_data.items():
+            if isinstance(value, dict):
+                # 递归创建子配置对象
+                setattr(self, key + "_config", DynamicConfig(value, key))
+            else:
+                # 直接设置属性
+                setattr(self, key, value)
+
+    def __repr__(self):
+        return str({k: v for k, v in self.__dict__.items()})
+
+
 class Resample_config:
     """重采样配置"""
 
@@ -205,6 +219,8 @@ class Config:
             self.dataset_path: str = dataset_path
             self.mirror: str = yaml_config["mirror"]
             self.openi_token: str = openi_token
+            # TODO: 自己的预处理配置
+            self.mypreprocess_config = DynamicConfig(yaml_config["mypreprocess"])
             self.resample_config: Resample_config = Resample_config.from_dict(
                 dataset_path, yaml_config["resample"]
             )

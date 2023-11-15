@@ -1,13 +1,11 @@
-
-
-#根据清洗后的list转录文件，将dataset中的冗余语音数据删除,raw中的还在
-#如果不小心弄错，可以通过resame重采样得到dataset
-
+#根据 (人工)清洗 过的 raw_list转录文件，排序 并 重新整理索引，同步到对应到raw文件夹中 
+#并生成dataset版的转录文件,即final版
+from config import config
 import os
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument( '-p',"--list_path", default="./filelists/baTeacher/raw_baTeacher.list")
-parser.add_argument( "-fp","--final_list_path", default="./filelists/baTeacher/baTeacher.list")
+parser.add_argument( '-p',"--list_path", default=config.mypreprocess_config.clean_raw_config.list_path)
+parser.add_argument( "-fp","--final_list_path", default=config.mypreprocess_config.clean_raw_config.final_list_path)
 args=parser.parse_args()
 list_path=args.list_path
 
