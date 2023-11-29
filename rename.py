@@ -18,8 +18,9 @@ def batch_rename(source,output, name, start_id):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--source", default="./raw/temp")
-    parser.add_argument( "--output", default="./raw/兔兔")
+    #这里如果不想改变目录，那么就先设置一个temp做中转站，因为不能直接在原目录下重命名
+    parser.add_argument( "--source", default="./raw/bakiMix")
+    parser.add_argument( "--output", default="./raw/temp")
     args=parser.parse_args()
     source=args.source
     output=args.output

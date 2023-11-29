@@ -1,5 +1,5 @@
 ---
-language: 
+language:
 - zh
 tags:
 - bert
@@ -46,7 +46,7 @@ If you find the technical report or resource is useful, please cite the followin
     pages = "657--668",
 }
 ```
-- Secondary: https://arxiv.org/abs/1906.08101  
+- Secondary: https://arxiv.org/abs/1906.08101
 ```
 @article{chinese-bert-wwm,
   title={Pre-Training with Whole Word Masking for Chinese BERT},

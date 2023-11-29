@@ -7,3 +7,7 @@
 - rename clean_list clean_raw 文件需要指定路径
 - 注意python bert_gen.py 前要确保config中的train路径正确
 - 训练混合角色模型时 数据集物理位置不需要变，只需要集成list即可（raw_list改完，重新clean raw一下 ，手动清洗(可选)，然后继续preprocess text ）
+
+# 2.0 版本
+config.py 文件中的-y参数可以指定 config.yml
+infer.py中依赖的english.py 中的G2p的包 将文字（字母、符号等）转换为对应的音素（发音单位），会使用到nltk工具包（自动下载），可以设置NLTK_DATA去指定路径

@@ -3,7 +3,7 @@ import random
 import torch
 import torch.utils.data
 from tqdm import tqdm
-from loguru import logger
+from tools.log import logger
 import commons
 from mel_processing import spectrogram_torch, mel_spectrogram_torch
 from utils import load_wav_to_torch, load_filepaths_and_text
@@ -145,36 +145,24 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
             word2ph[0] += 1
         bert_path = wav_path.replace(".wav", ".bert.pt")
         try:
-            bert = torch.load(bert_path)
-            assert bert.shape[-1] == len(phone)
-        except:
-            bert = get_bert(text, word2ph, language_str)
-            torch.save(bert, bert_path)
-            assert bert.shape[-1] == len(phone), phone
+            bert_ori = torch.load(bert_path)
+            assert bert_ori.shape[-1] == len(phone)
+        except Exception as e:
+            logger.warning("Bert load Failed")
+            logger.warning(e)
 
         if language_str == "ZH":
-            bert = bert
-            ja_bert = torch.zeros(768, len(phone))
+            bert = bert_ori
+            ja_bert = torch.zeros(1024, len(phone))
+            en_bert = torch.zeros(1024, len(phone))
         elif language_str == "JP":
-            ja_bert = bert
             bert = torch.zeros(1024, len(phone))
-        else:
+            ja_bert = bert_ori
+            en_bert = torch.zeros(1024, len(phone))
+        elif language_str == "EN":
             bert = torch.zeros(1024, len(phone))
-            ja_bert = torch.zeros(768, len(phone))
-        assert bert.shape[-1] == len(phone), (
-            bert.shape,
-            len(phone),
-            sum(word2ph),
-            p1,
-            p2,
-            t1,
-            t2,
-            pold,
-            pold2,
-            word2ph,
-            text,
-            w2pho,
-        )
+            ja_bert = torch.zeros(1024, len(phone))
+            en_bert = bert_ori
         phone = torch.LongTensor(phone)
         tone = torch.LongTensor(tone)
         language = torch.LongTensor(language)

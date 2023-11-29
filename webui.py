@@ -3,6 +3,9 @@
 import sys, os
 import logging
 
+import re_matching
+from tools.sentence import split_by_language
+
 logging.getLogger("numba").setLevel(logging.WARNING)
 logging.getLogger("markdown_it").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -18,10 +21,7 @@ import torch
 import argparse
 import commons
 import utils
-from models import SynthesizerTrn
-from text.symbols import symbols
-from text import cleaned_text_to_sequence, get_bert
-from text.cleaner import clean_text
+from infer import infer, latest_version, get_net_g, infer_multilang
 import gradio as gr
 import webbrowser
 import numpy as np
@@ -31,88 +31,104 @@ net_g = None
 if sys.platform == "darwin" and torch.backends.mps.is_available():
     device = "mps"
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-else:
-    device = "cuda"
 
 
-def get_text(text, language_str, hps):
-    norm_text, phone, tone, word2ph = clean_text(text, language_str)
-    phone, tone, language = cleaned_text_to_sequence(phone, tone, language_str)
-
-    if hps.data.add_blank:
-        phone = commons.intersperse(phone, 0)
-        tone = commons.intersperse(tone, 0)
-        language = commons.intersperse(language, 0)
-        for i in range(len(word2ph)):
-            word2ph[i] = word2ph[i] * 2
-        word2ph[0] += 1
-    bert = get_bert(norm_text, word2ph, language_str, device)
-    del word2ph
-    assert bert.shape[-1] == len(phone), phone
-
-    if language_str == "ZH":
-        bert = bert
-        ja_bert = torch.zeros(768, len(phone))
-    elif language_str == "JP":
-        ja_bert = bert
-        bert = torch.zeros(1024, len(phone))
-    else:
-        bert = torch.zeros(1024, len(phone))
-        ja_bert = torch.zeros(768, len(phone))
-
-    assert bert.shape[-1] == len(
-        phone
-    ), f"Bert seq len {bert.shape[-1]} != {len(phone)}"
-
-    phone = torch.LongTensor(phone)
-    tone = torch.LongTensor(tone)
-    language = torch.LongTensor(language)
-    return bert, ja_bert, phone, tone, language
-
-
-def infer(text, sdp_ratio, noise_scale, noise_scale_w, length_scale, sid, language):
-    global net_g
-    bert, ja_bert, phones, tones, lang_ids = get_text(text, language, hps)
+def generate_audio(
+    slices,
+    sdp_ratio,
+    noise_scale,
+    noise_scale_w,
+    length_scale,
+    speaker,
+    language,
+    skip_start=False,
+    skip_end=False,
+):
+    audio_list = []
+    # silence = np.zeros(hps.data.sampling_rate // 2, dtype=np.int16)
     with torch.no_grad():
-        x_tst = phones.to(device).unsqueeze(0)
-        tones = tones.to(device).unsqueeze(0)
-        lang_ids = lang_ids.to(device).unsqueeze(0)
-        bert = bert.to(device).unsqueeze(0)
-        ja_bert = ja_bert.to(device).unsqueeze(0)
-        x_tst_lengths = torch.LongTensor([phones.size(0)]).to(device)
-        del phones
-        speakers = torch.LongTensor([hps.data.spk2id[sid]]).to(device)
-        audio = (
-            net_g.infer(
-                x_tst,
-                x_tst_lengths,
-                speakers,
-                tones,
-                lang_ids,
-                bert,
-                ja_bert,
+        for idx, piece in enumerate(slices):
+            skip_start = (idx != 0) and skip_start
+            skip_end = (idx != len(slices) - 1) and skip_end
+            audio = infer(
+                piece,
                 sdp_ratio=sdp_ratio,
                 noise_scale=noise_scale,
                 noise_scale_w=noise_scale_w,
                 length_scale=length_scale,
-            )[0][0, 0]
-            .data.cpu()
-            .float()
-            .numpy()
-        )
-        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers
-        torch.cuda.empty_cache()
-        return audio
+                sid=speaker,
+                language=language,
+                hps=hps,
+                net_g=net_g,
+                device=device,
+                skip_start=skip_start,
+                skip_end=skip_end,
+            )
+            audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
+            audio_list.append(audio16bit)
+            # audio_list.append(silence)  # 将静音添加到列表中
+    return audio_list
 
 
-def tts_fn(
-    text, speaker, sdp_ratio, noise_scale, noise_scale_w, length_scale, language,model_name
+def generate_audio_multilang(
+    slices,
+    sdp_ratio,
+    noise_scale,
+    noise_scale_w,
+    length_scale,
+    speaker,
+    language,
+    skip_start=False,
+    skip_end=False,
 ):
-    _ = utils.load_checkpoint(os.path.join(args.model_path,model_name), net_g, None, skip_optimizer=True)
-    slices = text.split("|")
     audio_list = []
+    # silence = np.zeros(hps.data.sampling_rate // 2, dtype=np.int16)
     with torch.no_grad():
-        for slice in slices:
+        for idx, piece in enumerate(slices):
+            skip_start = (idx != 0) and skip_start
+            skip_end = (idx != len(slices) - 1) and skip_end
+            audio = infer_multilang(
+                piece,
+                sdp_ratio=sdp_ratio,
+                noise_scale=noise_scale,
+                noise_scale_w=noise_scale_w,
+                length_scale=length_scale,
+                sid=speaker,
+                language=language[idx],
+                hps=hps,
+                net_g=net_g,
+                device=device,
+                skip_start=skip_start,
+                skip_end=skip_end,
+            )
+            audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
+            audio_list.append(audio16bit)
+            # audio_list.append(silence)  # 将静音添加到列表中
+    return audio_list
+
+
+def tts_split(
+    text: str,
+    speaker,
+    sdp_ratio,
+    noise_scale,
+    noise_scale_w,
+    length_scale,
+    language,
+    cut_by_sent,
+    interval_between_para,
+    interval_between_sent,
+):
+    if language == "mix":
+        return ("invalid", None)
+    while text.find("\n\n") != -1:
+        text = text.replace("\n\n", "\n")
+    para_list = re_matching.cut_para(text)
+    audio_list = []
+    if not cut_by_sent:
+        for idx, p in enumerate(para_list):
+            skip_start = idx != 0
+            skip_end = idx != len(para_list) - 1
             audio = infer(
                 slice,
                 sdp_ratio=sdp_ratio,
@@ -121,16 +137,197 @@ def tts_fn(
                 length_scale=length_scale,
                 sid=speaker,
                 language=language,
+                hps=hps,
+                net_g=net_g,
+                device=device,
+                skip_start=skip_start,
+                skip_end=skip_end,
             )
-            audio_list.append(audio)
-            silence = np.zeros(hps.data.sampling_rate)  # 生成1秒的静音
-            audio_list.append(silence)  # 将静音添加到列表中
+            audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
+            audio_list.append(audio16bit)
+            silence = np.zeros((int)(44100 * interval_between_para), dtype=np.int16)
+            audio_list.append(silence)
+    else:
+        for idx, p in enumerate(para_list):
+            skip_start = idx != 0
+            skip_end = idx != len(para_list) - 1
+            audio_list_sent = []
+            sent_list = re_matching.cut_sent(p)
+            for idx, s in enumerate(sent_list):
+                skip_start = (idx != 0) and skip_start
+                skip_end = (idx != len(sent_list) - 1) and skip_end
+                audio = infer(
+                    s,
+                    sdp_ratio=sdp_ratio,
+                    noise_scale=noise_scale,
+                    noise_scale_w=noise_scale_w,
+                    length_scale=length_scale,
+                    sid=speaker,
+                    language=language,
+                    hps=hps,
+                    net_g=net_g,
+                    device=device,
+                    skip_start=skip_start,
+                    skip_end=skip_end,
+                )
+                audio_list_sent.append(audio)
+                silence = np.zeros((int)(44100 * interval_between_sent))
+                audio_list_sent.append(silence)
+            if (interval_between_para - interval_between_sent) > 0:
+                silence = np.zeros(
+                    (int)(44100 * (interval_between_para - interval_between_sent))
+                )
+                audio_list_sent.append(silence)
+            audio16bit = gr.processing_utils.convert_to_16_bit_wav(
+                np.concatenate(audio_list_sent)
+            )  # 对完整句子做音量归一
+            audio_list.append(audio16bit)
     audio_concat = np.concatenate(audio_list)
-    
-       # 保存音频数据到本地文件
-    sf.write('out/output_audio.wav', audio_concat, samplerate=hps.data.sampling_rate)  # 请替换YOUR_SAMPLERATE为实际的采样率
+    return ("Success", (44100, audio_concat))
 
-    return "Success", (hps.data.sampling_rate,audio_concat)
+
+def tts_fn(
+    text: str,
+    speaker,
+    sdp_ratio,
+    noise_scale,
+    noise_scale_w,
+    length_scale,
+    language,
+):
+    audio_list = []
+    if language == "mix":
+        bool_valid, str_valid = re_matching.validate_text(text)
+        if not bool_valid:
+            return str_valid, (
+                hps.data.sampling_rate,
+                np.concatenate([np.zeros(hps.data.sampling_rate // 2)]),
+            )
+        result = []
+        for slice in re_matching.text_matching(text):
+            _speaker = slice.pop()
+            temp_contant = []
+            temp_lang = []
+            for lang, content in slice:
+                if "|" in content:
+                    temp = []
+                    temp_ = []
+                    for i in content.split("|"):
+                        if i != "":
+                            temp.append([i])
+                            temp_.append([lang])
+                        else:
+                            temp.append([])
+                            temp_.append([])
+                    temp_contant += temp
+                    temp_lang += temp_
+                else:
+                    if len(temp_contant) == 0:
+                        temp_contant.append([])
+                        temp_lang.append([])
+                    temp_contant[-1].append(content)
+                    temp_lang[-1].append(lang)
+            for i, j in zip(temp_lang, temp_contant):
+                result.append([*zip(i, j), _speaker])
+        for i, one in enumerate(result):
+            skip_start = i != 0
+            skip_end = i != len(result) - 1
+            _speaker = one.pop()
+            idx = 0
+            while idx < len(one):
+                text_to_generate = []
+                lang_to_generate = []
+                while True:
+                    lang, content = one[idx]
+                    temp_text = [content]
+                    if len(text_to_generate) > 0:
+                        text_to_generate[-1] += [temp_text.pop(0)]
+                        lang_to_generate[-1] += [lang]
+                    if len(temp_text) > 0:
+                        text_to_generate += [[i] for i in temp_text]
+                        lang_to_generate += [[lang]] * len(temp_text)
+                    if idx + 1 < len(one):
+                        idx += 1
+                    else:
+                        break
+                skip_start = (idx != 0) and skip_start
+                skip_end = (idx != len(one) - 1) and skip_end
+                print(text_to_generate, lang_to_generate)
+                audio_list.extend(
+                    generate_audio_multilang(
+                        text_to_generate,
+                        sdp_ratio,
+                        noise_scale,
+                        noise_scale_w,
+                        length_scale,
+                        _speaker,
+                        lang_to_generate,
+                        skip_start,
+                        skip_end,
+                    )
+                )
+                idx += 1
+    elif language.lower() == "auto":
+        for idx, slice in enumerate(text.split("|")):
+            if slice == "":
+                continue
+            skip_start = idx != 0
+            skip_end = idx != len(text.split("|")) - 1
+            sentences_list = split_by_language(
+                slice, target_languages=["zh", "ja", "en"]
+            )
+            idx = 0
+            while idx < len(sentences_list):
+                text_to_generate = []
+                lang_to_generate = []
+                while True:
+                    content, lang = sentences_list[idx]
+                    temp_text = [content]
+                    lang = lang.upper()
+                    if lang == "JA":
+                        lang = "JP"
+                    if len(text_to_generate) > 0:
+                        text_to_generate[-1] += [temp_text.pop(0)]
+                        lang_to_generate[-1] += [lang]
+                    if len(temp_text) > 0:
+                        text_to_generate += [[i] for i in temp_text]
+                        lang_to_generate += [[lang]] * len(temp_text)
+                    if idx + 1 < len(sentences_list):
+                        idx += 1
+                    else:
+                        break
+                skip_start = (idx != 0) and skip_start
+                skip_end = (idx != len(sentences_list) - 1) and skip_end
+                print(text_to_generate, lang_to_generate)
+                audio_list.extend(
+                    generate_audio_multilang(
+                        text_to_generate,
+                        sdp_ratio,
+                        noise_scale,
+                        noise_scale_w,
+                        length_scale,
+                        speaker,
+                        lang_to_generate,
+                        skip_start,
+                        skip_end,
+                    )
+                )
+                idx += 1
+    else:
+        audio_list.extend(
+            generate_audio(
+                text.split("|"),
+                sdp_ratio,
+                noise_scale,
+                noise_scale_w,
+                length_scale,
+                speaker,
+                language,
+            )
+        )
+
+    audio_concat = np.concatenate(audio_list)
+    return "Success", (hps.data.sampling_rate, audio_concat)
 
 
 if __name__ == "__main__":
@@ -180,7 +377,7 @@ if __name__ == "__main__":
 
     speaker_ids = hps.data.spk2id
     speakers = list(speaker_ids.keys())
-    languages = ["ZH", "JP"]
+    languages = ["ZH", "JP", "EN", "mix", "auto"]
     with gr.Blocks() as app:
         with gr.Row():
             with gr.Column():

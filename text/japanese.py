@@ -361,12 +361,10 @@ _TAGGER = MeCab.Tagger()
 def text2kata(text: str) -> str:
     parsed = _TAGGER.parse(text)
     res = []
-    for line in parsed.split("\n"):
-        if line == "EOS":
-            break
-        parts = line.split("\t")
-
-        word, yomi = parts[0], parts[1]
+    for parts in parsed:
+        word, yomi = replace_punctuation(parts["string"]), parts["pron"].replace(
+            "’", ""
+        )
         if yomi:
             res.append(yomi)
         else:
@@ -379,6 +377,68 @@ def text2kata(text: str) -> str:
             else:
                 res.append(word)
     return hira2kata("".join(res))
+
+
+def text2sep_kata(text: str) -> (list, list):
+    parsed = pyopenjtalk.run_frontend(text)
+
+    res = []
+    sep = []
+    for parts in parsed:
+        word, yomi = replace_punctuation(parts["string"]), parts["pron"].replace(
+            "’", ""
+        )
+        if yomi:
+            if re.match(_MARKS, yomi):
+                if len(word) > 1:
+                    word = [replace_punctuation(i) for i in list(word)]
+                    yomi = word
+                    res += yomi
+                    sep += word
+                    continue
+                elif word not in rep_map.keys() and word not in rep_map.values():
+                    word = ","
+                yomi = word
+            res.append(yomi)
+        else:
+            if word in _SYMBOL_TOKENS:
+                res.append(word)
+            elif word in ("っ", "ッ"):
+                res.append("ッ")
+            elif word in _NO_YOMI_TOKENS:
+                pass
+            else:
+                res.append(word)
+        sep.append(word)
+    return sep, [hira2kata(i) for i in res], get_accent(parsed)
+
+
+def get_accent(parsed):
+    labels = pyopenjtalk.make_label(parsed)
+
+    phonemes = []
+    accents = []
+    for n, label in enumerate(labels):
+        phoneme = re.search(r"\-([^\+]*)\+", label).group(1)
+        if phoneme not in ["sil", "pau"]:
+            phonemes.append(phoneme.replace("cl", "q").lower())
+        else:
+            continue
+        a1 = int(re.search(r"/A:(\-?[0-9]+)\+", label).group(1))
+        a2 = int(re.search(r"\+(\d+)\+", label).group(1))
+        if re.search(r"\-([^\+]*)\+", labels[n + 1]).group(1) in ["sil", "pau"]:
+            a2_next = -1
+        else:
+            a2_next = int(re.search(r"\+(\d+)\+", labels[n + 1]).group(1))
+        # Falling
+        if a1 == 0 and a2_next == a2 + 1:
+            accents.append(-1)
+        # Rising
+        elif a2 == 1 and a2_next == 2:
+            accents.append(1)
+        else:
+            accents.append(0)
+    return list(zip(phonemes, accents))
 
 
 _ALPHASYMBOL_YOMI = {

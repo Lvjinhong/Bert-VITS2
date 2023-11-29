@@ -2,14 +2,16 @@ from flask import Flask, request, Response
 from io import BytesIO
 import torch
 from av import open as avopen
-
-import commons
+from typing import Dict, List
+import re_matching
 import utils
 from models import SynthesizerTrn
 from text.symbols import symbols
 from text import cleaned_text_to_sequence, get_bert
 from text.cleaner import clean_text
 from scipy.io import wavfile
+import gradio as gr
+from config import config
 
 # Flask Init
 app = Flask(__name__)
@@ -106,14 +108,63 @@ def wav2(i, o, format):
     inp.close()
 
 
-# Load Generator
+net_g_List = []
+hps_List = []
+# 模型角色字典
+# 使用方法 chr_name = chrsMap[model_id][chr_id]
+chrsMap: List[Dict[int, str]] = list()
+
+# 加载模型
+models = config.server_config.models
+for model in models:
+    hps_List.append(utils.get_hparams_from_file(model["config"]))
+    # 添加角色字典
+    chrsMap.append(dict())
+    for name, cid in hps_List[-1].data.spk2id.items():
+        chrsMap[-1][cid] = name
+    version = (
+        hps_List[-1].version if hasattr(hps_List[-1], "version") else latest_version
+    )
+    net_g_List.append(
+        get_net_g(
+            model_path=model["model"],
+            version=version,
+            device=model["device"],
+            hps=hps_List[-1],
+        )
+    )
 
 
-@app.route("/get_config")
-def get_config(): 
-    config_path="./configs"
-       
-    pass
+def generate_audio(
+    slices,
+    sdp_ratio,
+    noise_scale,
+    noise_scale_w,
+    length_scale,
+    speaker,
+    language,
+):
+    audio_list = []
+    silence = np.zeros(hps.data.sampling_rate // 2, dtype=np.int16)
+    with torch.no_grad():
+        for piece in slices:
+            audio = infer(
+                piece,
+                sdp_ratio=sdp_ratio,
+                noise_scale=noise_scale,
+                noise_scale_w=noise_scale_w,
+                length_scale=length_scale,
+                sid=speaker,
+                language=language,
+                hps=hps,
+                net_g=net_g,
+                device=device,
+            )
+            audio16bit = gr.processing_utils.convert_to_16_bit_wav(audio)
+            audio_list.append(audio16bit)
+            audio_list.append(silence)  # 将静音添加到列表中
+    return audio_list
+
 
 @app.route("/")
 def main():
@@ -147,24 +198,53 @@ def main():
             return "Missing Parameter"
         if fmt not in ("mp3", "wav", "ogg"):
             return "Invalid Format"
-        if language not in ("JA", "ZH"):
+        if language not in ("JP", "ZH", "EN", "mix"):
             return "Invalid language"
     except:
         return "Invalid Parameter"
 
-    with torch.no_grad():
-        audio = infer(
-            text,
-            sdp_ratio=sdp_ratio,
-            noise_scale=noise,
-            noise_scale_w=noisew,
-            length_scale=length,
-            sid=speaker,
-            language=language,
+    if speaker_id is not None:
+        if speaker_id.isdigit():
+            speaker = chrsMap[model][int(speaker_id)]
+    audio_list = []
+    if language == "mix":
+        bool_valid, str_valid = re_matching.validate_text(text)
+        if not bool_valid:
+            return str_valid, (
+                hps.data.sampling_rate,
+                np.concatenate([np.zeros(hps.data.sampling_rate // 2)]),
+            )
+        result = re_matching.text_matching(text)
+        for one in result:
+            _speaker = one.pop()
+            for lang, content in one:
+                audio_list.extend(
+                    generate_audio(
+                        content.split("|"),
+                        sdp_ratio,
+                        noise_scale,
+                        noise_scale_w,
+                        length_scale,
+                        _speaker,
+                        lang,
+                    )
+                )
+    else:
+        audio_list.extend(
+            generate_audio(
+                text.split("|"),
+                sdp_ratio,
+                noise_scale,
+                noise_scale_w,
+                length_scale,
+                speaker,
+                language,
+            )
         )
 
+    audio_concat = np.concatenate(audio_list)
     with BytesIO() as wav:
-        wavfile.write(wav, hps.data.sampling_rate, audio)
+        wavfile.write(wav, hps_List[model].data.sampling_rate, audio_concat)
         torch.cuda.empty_cache()
         if fmt == "wav":
             return Response(wav.getvalue(), mimetype="audio/wav")
@@ -174,3 +254,7 @@ def main():
             return Response(
                 ofp.getvalue(), mimetype="audio/mpeg" if fmt == "mp3" else "audio/ogg"
             )
+
+
+if __name__ == "__main__":
+    app.run(port=config.server_config.port, server_name="0.0.0.0")
