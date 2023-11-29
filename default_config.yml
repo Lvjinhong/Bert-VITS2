@@ -16,8 +16,8 @@ mypreprocess:
   #autoLable 自动标注配置
   autoLable:
     in_dir: "raw/bakimix"
-    out_file: "bakimix"
-    character_name: "filelists/bakiMix/raw_bakiMix.list"
+    out_file: "filelists/bakiMix/raw_bakiMix.list"
+    character_name: "bakimix"
   clean_raw:
     list_path: "filelists/baTeacher/raw_baTeacher.list"
     final_list_path: "filelists/baTeacher/baTeacher.list"

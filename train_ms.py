@@ -360,7 +360,10 @@ def train_and_evaluate(
     net_d.train()
     if net_dur_disc is not None:
         net_dur_disc.train()
-
+    
+    print("\033[31m总迭代次数:{},batch_sampler.lengths样本实际数量:{},train_loader.batch_sampler.total_size:{}\033[0m".format(len(train_loader),len(train_loader.batch_sampler.lengths),train_loader.batch_sampler.total_size))
+    
+    # logger.warning("总迭代次数:{},batch_sampler.lengths样本实际数量:{},train_loader.batch_sampler.total_size:{}".format(len(train_loader),len(train_loader.batch_sampler.lengths),train_loader.batch_sampler.total_size))
     for batch_idx, (
         x,
         x_lengths,
@@ -375,6 +378,7 @@ def train_and_evaluate(
         ja_bert,
         en_bert,
     ) in tqdm(enumerate(train_loader)):
+   
         if net_g.module.use_noise_scaled_mas:
             current_mas_noise_scale = (
                 net_g.module.mas_noise_scale_initial
@@ -503,6 +507,7 @@ def train_and_evaluate(
             if global_step % hps.train.log_interval == 0:
                 lr = optim_g.param_groups[0]["lr"]
                 losses = [loss_disc, loss_gen, loss_fm, loss_mel, loss_dur, loss_kl]
+
                 logger.info(
                     "Train Epoch: {} [{:.0f}%]".format(
                         epoch, 100.0 * batch_idx / len(train_loader)
