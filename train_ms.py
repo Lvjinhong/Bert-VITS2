@@ -1,5 +1,4 @@
 # flake8: noqa: E402
-
 import platform
 import os
 import torch
@@ -13,6 +12,7 @@ from tqdm import tqdm
 import logging
 from config import config
 import argparse
+import datetime
 
 logging.getLogger("numba").setLevel(logging.WARNING)
 import commons
@@ -36,7 +36,6 @@ torch.backends.cudnn.allow_tf32 = (
     True  # If encontered training problem,please try to disable TF32.
 )
 torch.set_float32_matmul_precision("medium")
-torch.backends.cudnn.benchmark = True
 torch.backends.cuda.sdp_kernel("flash")
 torch.backends.cuda.enable_flash_sdp(True)
 torch.backends.cuda.enable_mem_efficient_sdp(
@@ -68,13 +67,13 @@ def run():
         )
     )
 
-    # 多卡训练设置
     backend = "nccl"
     if platform.system() == "Windows":
-        backend = "gloo"
+        backend = "gloo"  # If Windows,switch to gloo backend.
     dist.init_process_group(
         backend=backend,
-        init_method="env://",  # If Windows,switch to gloo backend.
+        init_method="env://",
+        timeout=datetime.timedelta(seconds=300),
     )  # Use torchrun instead of mp.spawn
     rank = dist.get_rank()
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -137,7 +136,7 @@ def run():
     collate_fn = TextAudioSpeakerCollate()
     train_loader = DataLoader(
         train_dataset,
-        num_workers=16,
+        num_workers=min(config.train_ms_config.num_workers, os.cpu_count() - 1),
         shuffle=False,
         pin_memory=True,
         collate_fn=collate_fn,
@@ -273,7 +272,10 @@ def run():
                 optim_dur_disc.param_groups[0]["initial_lr"] = dur_resume_lr
 
         epoch_str = max(epoch_str, 1)
-        global_step = (epoch_str - 1) * len(train_loader)
+        # global_step = (epoch_str - 1) * len(train_loader)
+        global_step = int(
+            utils.get_steps(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"))
+        )
         print(
             f"******************检测到模型存在，epoch为 {epoch_str}，gloabl step为 {global_step}*********************"
         )
@@ -377,6 +379,7 @@ def train_and_evaluate(
         bert,
         ja_bert,
         en_bert,
+        emo,
     ) in tqdm(enumerate(train_loader)):
    
         if net_g.module.use_noise_scaled_mas:
@@ -400,6 +403,7 @@ def train_and_evaluate(
         bert = bert.cuda(local_rank, non_blocking=True)
         ja_bert = ja_bert.cuda(local_rank, non_blocking=True)
         en_bert = en_bert.cuda(local_rank, non_blocking=True)
+        emo = emo.cuda(local_rank, non_blocking=True)
 
         with autocast(enabled=hps.train.fp16_run):
             (
@@ -411,6 +415,7 @@ def train_and_evaluate(
                 z_mask,
                 (z, z_p, m_p, logs_p, m_q, logs_q),
                 (hidden_x, logw, logw_),
+                loss_commit,
             ) = net_g(
                 x,
                 x_lengths,
@@ -422,6 +427,7 @@ def train_and_evaluate(
                 bert,
                 ja_bert,
                 en_bert,
+                emo,
             )
             mel = spec_to_mel_torch(
                 spec,
@@ -492,7 +498,9 @@ def train_and_evaluate(
 
                 loss_fm = feature_loss(fmap_r, fmap_g)
                 loss_gen, losses_gen = generator_loss(y_d_hat_g)
-                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_dur + loss_kl
+                loss_gen_all = (
+                    loss_gen + loss_fm + loss_mel + loss_dur + loss_kl + loss_commit
+                )
                 if net_dur_disc is not None:
                     loss_dur_gen, losses_dur_gen = generator_loss(y_dur_hat_g)
                     loss_gen_all += loss_dur_gen
@@ -585,7 +593,7 @@ def train_and_evaluate(
                         epoch,
                         os.path.join(hps.model_dir, "DUR_{}.pth".format(global_step)),
                     )
-                keep_ckpts = getattr(hps.train, "keep_ckpts", 5)
+                keep_ckpts = config.train_ms_config.keep_ckpts
                 if keep_ckpts > 0:
                     utils.clean_checkpoints(
                         path_to_models=hps.model_dir,
@@ -618,6 +626,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
             bert,
             ja_bert,
             en_bert,
+            emo,
         ) in enumerate(eval_loader):
             x, x_lengths = x.cuda(), x_lengths.cuda()
             spec, spec_lengths = spec.cuda(), spec_lengths.cuda()
@@ -628,6 +637,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
             en_bert = en_bert.cuda()
             tone = tone.cuda()
             language = language.cuda()
+            emo = emo.cuda()
             for use_sdp in [True, False]:
                 y_hat, attn, mask, *_ = generator.module.infer(
                     x,
@@ -638,6 +648,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
                     bert,
                     ja_bert,
                     en_bert,
+                    emo,
                     y=spec,
                     max_len=1000,
                     sdp_ratio=0.0 if not use_sdp else 1.0,
