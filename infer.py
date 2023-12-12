@@ -6,16 +6,19 @@
 特殊版本说明：
     1.1.1-fix： 1.1.1版本训练的模型，但是在推理时使用dev的日语修复
     1.1.1-dev： dev开发
-    2.0：当前版本
+    2.1：当前版本
 """
 import torch
 import commons
 from text import cleaned_text_to_sequence, get_bert
+from get_emo import get_emo
 from text.cleaner import clean_text
 import utils
 
 from models import SynthesizerTrn
 from text.symbols import symbols
+from oldVersion.V200.models import SynthesizerTrn as V200SynthesizerTrn
+from oldVersion.V200.text import symbols as V200symbols
 from oldVersion.V111.models import SynthesizerTrn as V111SynthesizerTrn
 from oldVersion.V111.text import symbols as V111symbols
 from oldVersion.V110.models import SynthesizerTrn as V110SynthesizerTrn
@@ -23,13 +26,16 @@ from oldVersion.V110.text import symbols as V110symbols
 from oldVersion.V101.models import SynthesizerTrn as V101SynthesizerTrn
 from oldVersion.V101.text import symbols as V101symbols
 
-from oldVersion import V111, V110, V101
+from oldVersion import V111, V110, V101, V200
 
 # 当前版本信息
-latest_version = "2.0"
+latest_version = "2.1"
 
 # 版本兼容
 SynthesizerTrnMap = {
+    "2.0.2-fix": V200SynthesizerTrn,
+    "2.0.1": V200SynthesizerTrn,
+    "2.0": V200SynthesizerTrn,
     "1.1.1-fix": V111SynthesizerTrn,
     "1.1.1": V111SynthesizerTrn,
     "1.1": V110SynthesizerTrn,
@@ -40,6 +46,9 @@ SynthesizerTrnMap = {
 }
 
 symbolsMap = {
+    "2.0.2-fix": V200symbols,
+    "2.0.1": V200symbols,
+    "2.0": V200symbols,
     "1.1.1-fix": V111symbols,
     "1.1.1": V111symbols,
     "1.1": V110symbols,
@@ -114,6 +123,15 @@ def get_text(text, language_str, hps, device):
     return bert, ja_bert, en_bert, phone, tone, language
 
 
+def get_emo_(reference_audio, emotion):
+    emo = (
+        torch.from_numpy(get_emo(reference_audio))
+        if reference_audio
+        else torch.Tensor([emotion])
+    )
+    return emo
+
+
 def infer(
     text,
     sdp_ratio,
@@ -125,11 +143,16 @@ def infer(
     hps,
     net_g,
     device,
+    reference_audio=None,
+    emotion=None,
     skip_start=False,
     skip_end=False,
 ):
-    # 支持中日双语版本
+    # 支持中日英三语版本
     inferMap_V2 = {
+        "2.0.2-fix": V200.infer,
+        "2.0.1": V200.infer,
+        "2.0": V200.infer,
         "1.1.1-fix": V111.infer_fix,
         "1.1.1": V111.infer,
         "1.1": V110.infer,
@@ -174,6 +197,7 @@ def infer(
     bert, ja_bert, en_bert, phones, tones, lang_ids = get_text(
         text, language, hps, device
     )
+    emo = get_emo_(reference_audio, emotion)
     if skip_start:
         phones = phones[1:]
         tones = tones[1:]
@@ -196,6 +220,7 @@ def infer(
         ja_bert = ja_bert.to(device).unsqueeze(0)
         en_bert = en_bert.to(device).unsqueeze(0)
         x_tst_lengths = torch.LongTensor([phones.size(0)]).to(device)
+        emo = emo.to(device).unsqueeze(0)
         del phones
         speakers = torch.LongTensor([hps.data.spk2id[sid]]).to(device)
         audio = (
@@ -208,6 +233,7 @@ def infer(
                 bert,
                 ja_bert,
                 en_bert,
+                emo,
                 sdp_ratio=sdp_ratio,
                 noise_scale=noise_scale,
                 noise_scale_w=noise_scale_w,
@@ -217,7 +243,7 @@ def infer(
             .float()
             .numpy()
         )
-        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers, ja_bert, en_bert
+        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers, ja_bert, en_bert, emo
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         return audio
@@ -234,14 +260,14 @@ def infer_multilang(
     hps,
     net_g,
     device,
+    reference_audio=None,
+    emotion=None,
     skip_start=False,
     skip_end=False,
 ):
     bert, ja_bert, en_bert, phones, tones, lang_ids = [], [], [], [], [], []
-    # bert, ja_bert, en_bert, phones, tones, lang_ids = get_text(
-    #     text, language, hps, device
-    # )
-    for idx, (t, l) in enumerate(zip(text, language)):
+    emo = get_emo_(reference_audio, emotion)
+    for idx, (txt, lang) in enumerate(zip(text, language)):
         skip_start = (idx != 0) or (skip_start and idx == 0)
         skip_end = (idx != len(text) - 1) or (skip_end and idx == len(text) - 1)
         (
@@ -251,7 +277,7 @@ def infer_multilang(
             temp_phones,
             temp_tones,
             temp_lang_ids,
-        ) = get_text(t, l, hps, device)
+        ) = get_text(txt, lang, hps, device)
         if skip_start:
             temp_bert = temp_bert[:, 1:]
             temp_ja_bert = temp_ja_bert[:, 1:]
@@ -285,6 +311,7 @@ def infer_multilang(
         bert = bert.to(device).unsqueeze(0)
         ja_bert = ja_bert.to(device).unsqueeze(0)
         en_bert = en_bert.to(device).unsqueeze(0)
+        emo = emo.to(device).unsqueeze(0)
         x_tst_lengths = torch.LongTensor([phones.size(0)]).to(device)
         del phones
         speakers = torch.LongTensor([hps.data.spk2id[sid]]).to(device)
@@ -298,6 +325,7 @@ def infer_multilang(
                 bert,
                 ja_bert,
                 en_bert,
+                emo,
                 sdp_ratio=sdp_ratio,
                 noise_scale=noise_scale,
                 noise_scale_w=noise_scale_w,
@@ -307,7 +335,7 @@ def infer_multilang(
             .float()
             .numpy()
         )
-        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers, ja_bert, en_bert
+        del x_tst, tones, lang_ids, bert, x_tst_lengths, speakers, ja_bert, en_bert, emo
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         return audio

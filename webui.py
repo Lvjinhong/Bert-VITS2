@@ -2,7 +2,6 @@
 
 import sys, os
 import logging
-
 import re_matching
 from tools.sentence import split_by_language
 
@@ -25,7 +24,10 @@ from infer import infer, latest_version, get_net_g, infer_multilang
 import gradio as gr
 import webbrowser
 import numpy as np
-import soundfile as sf
+from config import config
+from tools.translate import translate
+import librosa
+
 net_g = None
 
 if sys.platform == "darwin" and torch.backends.mps.is_available():
@@ -41,6 +43,8 @@ def generate_audio(
     length_scale,
     speaker,
     language,
+    reference_audio,
+    emotion,
     skip_start=False,
     skip_end=False,
 ):
@@ -52,6 +56,8 @@ def generate_audio(
             skip_end = (idx != len(slices) - 1) and skip_end
             audio = infer(
                 piece,
+                reference_audio=reference_audio,
+                emotion=emotion,
                 sdp_ratio=sdp_ratio,
                 noise_scale=noise_scale,
                 noise_scale_w=noise_scale_w,
@@ -78,6 +84,8 @@ def generate_audio_multilang(
     length_scale,
     speaker,
     language,
+    reference_audio,
+    emotion,
     skip_start=False,
     skip_end=False,
 ):
@@ -89,6 +97,8 @@ def generate_audio_multilang(
             skip_end = (idx != len(slices) - 1) and skip_end
             audio = infer_multilang(
                 piece,
+                reference_audio=reference_audio,
+                emotion=emotion,
                 sdp_ratio=sdp_ratio,
                 noise_scale=noise_scale,
                 noise_scale_w=noise_scale_w,
@@ -118,6 +128,8 @@ def tts_split(
     cut_by_sent,
     interval_between_para,
     interval_between_sent,
+    reference_audio,
+    emotion,
 ):
     if language == "mix":
         return ("invalid", None)
@@ -130,7 +142,9 @@ def tts_split(
             skip_start = idx != 0
             skip_end = idx != len(para_list) - 1
             audio = infer(
-                slice,
+                p,
+                reference_audio=reference_audio,
+                emotion=emotion,
                 sdp_ratio=sdp_ratio,
                 noise_scale=noise_scale,
                 noise_scale_w=noise_scale_w,
@@ -158,6 +172,8 @@ def tts_split(
                 skip_end = (idx != len(sent_list) - 1) and skip_end
                 audio = infer(
                     s,
+                    reference_audio=reference_audio,
+                    emotion=emotion,
                     sdp_ratio=sdp_ratio,
                     noise_scale=noise_scale,
                     noise_scale_w=noise_scale_w,
@@ -194,6 +210,8 @@ def tts_fn(
     noise_scale_w,
     length_scale,
     language,
+    reference_audio,
+    emotion,
 ):
     audio_list = []
     if language == "mix":
@@ -260,8 +278,10 @@ def tts_fn(
                         noise_scale,
                         noise_scale_w,
                         length_scale,
-                        _speaker,
+                        speaker,
                         lang_to_generate,
+                        reference_audio,
+                        emotion,
                         skip_start,
                         skip_end,
                     )
@@ -308,6 +328,8 @@ def tts_fn(
                         length_scale,
                         speaker,
                         lang_to_generate,
+                        reference_audio,
+                        emotion,
                         skip_start,
                         skip_end,
                     )
@@ -323,6 +345,8 @@ def tts_fn(
                 length_scale,
                 speaker,
                 language,
+                reference_audio,
+                emotion,
             )
         )
 
@@ -392,26 +416,57 @@ if __name__ == "__main__":
                 speaker = gr.Dropdown(
                     choices=speakers, value=speakers[0], label="Speaker"
                 )
+                emotion = gr.Slider(
+                    minimum=0, maximum=9, value=0, step=1, label="Emotion"
+                )
                 sdp_ratio = gr.Slider(
                     minimum=0, maximum=1, value=0.2, step=0.1, label="SDP Ratio"
                 )
                 noise_scale = gr.Slider(
-                    minimum=0.1, maximum=2, value=0.6, step=0.1, label="Noise Scale"
+                    minimum=0.1, maximum=2, value=0.6, step=0.1, label="Noise"
                 )
                 noise_scale_w = gr.Slider(
-                    minimum=0.1, maximum=2, value=0.8, step=0.1, label="Noise Scale W"
+                    minimum=0.1, maximum=2, value=0.8, step=0.1, label="Noise_W"
                 )
                 length_scale = gr.Slider(
-                    minimum=0.1, maximum=2, value=1, step=0.1, label="Length Scale"
+                    minimum=0.1, maximum=2, value=1.0, step=0.1, label="Length"
                 )
                 language = gr.Dropdown(
                     choices=languages, value=languages[0], label="Language"
                 )
                 btn = gr.Button("Generate!", variant="primary")
             with gr.Column():
-                text_output = gr.Textbox(label="Message")
-                audio_output = gr.Audio(label="Output Audio")
-
+                with gr.Row():
+                    with gr.Column():
+                        interval_between_sent = gr.Slider(
+                            minimum=0,
+                            maximum=5,
+                            value=0.2,
+                            step=0.1,
+                            label="句间停顿(秒)，勾选按句切分才生效",
+                        )
+                        interval_between_para = gr.Slider(
+                            minimum=0,
+                            maximum=10,
+                            value=1,
+                            step=0.1,
+                            label="段间停顿(秒)，需要大于句间停顿才有效",
+                        )
+                        opt_cut_by_sent = gr.Checkbox(
+                            label="按句切分    在按段落切分的基础上再按句子切分文本"
+                        )
+                        slicer = gr.Button("切分生成", variant="primary")
+                text_output = gr.Textbox(label="状态信息")
+                audio_output = gr.Audio(label="输出音频")
+                # explain_image = gr.Image(
+                #     label="参数解释信息",
+                #     show_label=True,
+                #     show_share_button=False,
+                #     show_download_button=False,
+                #     value=os.path.abspath("./img/参数说明.png"),
+                # )
+                reference_text = gr.Markdown(value="## 情感参考音频（WAV 格式）：用于生成语音的情感参考。")
+                reference_audio = gr.Audio(label="情感参考音频（WAV 格式）", type="filepath")
         btn.click(
             tts_fn,
             inputs=[
@@ -422,10 +477,41 @@ if __name__ == "__main__":
                 noise_scale_w,
                 length_scale,
                 language,
-                model_selector
+                reference_audio,
+                emotion,
             ],
             outputs=[text_output, audio_output],
         )
 
-    webbrowser.open("http://127.0.0.1:7860")
-    app.launch(share=args.share)
+        trans.click(
+            translate,
+            inputs=[text],
+            outputs=[text],
+        )
+        slicer.click(
+            tts_split,
+            inputs=[
+                text,
+                speaker,
+                sdp_ratio,
+                noise_scale,
+                noise_scale_w,
+                length_scale,
+                language,
+                opt_cut_by_sent,
+                interval_between_para,
+                interval_between_sent,
+                reference_audio,
+                emotion,
+            ],
+            outputs=[text_output, audio_output],
+        )
+
+        reference_audio.upload(
+            lambda x: librosa.load(x, 16000)[::-1],
+            inputs=[reference_audio],
+            outputs=[reference_audio],
+        )
+    print("推理页面已开启!")
+    webbrowser.open(f"http://127.0.0.1:{config.webui_config.port}")
+    app.launch(share=config.webui_config.share, server_port=config.webui_config.port)
