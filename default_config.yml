@@ -132,7 +132,7 @@ webui:
 server:
   # 端口号
   port: 5000
-  # 模型默认使用设备：但是当前并没有实现这个配置。
+  # 模型默认使用设备：但是当前并没有实现这个配置
   device: "cuda"
   # 需要加载的所有模型的配置
   # 注意，所有模型都必须正确配置model与config的路径，空路径会导致加载错误。
@@ -180,6 +180,7 @@ server:
 # 百度翻译开放平台 api配置
 # api接入文档 https://api.fanyi.baidu.com/doc/21
 # 请不要在github等网站公开分享你的app id 与 key
+
 translate:
   # 你的APPID
   "app_key": ""
