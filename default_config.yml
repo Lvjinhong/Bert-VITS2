@@ -48,10 +48,10 @@ preprocess_text:
   val_path: "filelists/val.list"
   # 配置文件路径
   config_path: "config.json"
-  # 每个speaker的验证集条数
-  val_per_spk: 4
+  # 每个语言的验证集条数
+  val_per_lang: 4
   # 验证集最大条数，多于的会被截断并放到训练集中
-  max_val_total: 8
+  max_val_total: 12
   # 是否进行数据清洗
   clean: true
 
@@ -62,7 +62,7 @@ bert_gen:
   # 训练数据集配置文件路径
   config_path: "config.json"
   # 并行数
-  num_processes: 2
+  num_processes: 4
   # 使用设备：可选项 "cuda" 显卡推理，"cpu" cpu推理
   # 该选项同时决定了get_bert_feature的默认设备
   device: "cuda"
@@ -75,9 +75,11 @@ emo_gen:
   # 训练数据集配置文件路径
   config_path: "config.json"
   # 并行数
-  num_processes: 2
+  num_processes: 4
   # 使用设备：可选项 "cuda" 显卡推理，"cpu" cpu推理
   device: "cuda"
+  # 使用多卡推理
+  use_multi_device: false
 
 # train 训练配置
 # 注意， “:” 后需要加空格
@@ -113,7 +115,7 @@ webui:
   # 推理设备
   device: "cuda"
   # 模型路径
-  model: "genshin/models/G_8000.pth"
+  model: "models/G_8000.pth"
   # 配置文件路径
   config_path: "configs/config.json"
   # 端口号
@@ -126,7 +128,7 @@ webui:
   language_identification_library: "langid"
 
 
-# server api配置
+# server-fastapi配置
 # 注意， “:” 后需要加空格
 # 注意，本配置下的所有配置均为相对于根目录的路径
 server:
@@ -134,8 +136,10 @@ server:
   port: 5000
   # 模型默认使用设备：但是当前并没有实现这个配置
   device: "cuda"
-  # 需要加载的所有模型的配置
+  # 需要加载的所有模型的配置，可以填多个模型，也可以不填模型，等网页成功后手动加载模型
+  # 不加载模型的配置格式：删除默认给的两个模型配置，给models赋值 [ ]，也就是空列表。参考模型2的speakers 即 models: [ ]
   # 注意，所有模型都必须正确配置model与config的路径，空路径会导致加载错误。
+  # 也可以不填模型，等网页加载成功后手动填写models。
   models:
     - # 模型的路径
       model: ""
@@ -175,7 +179,6 @@ server:
       # 模型人物默认参数
       # 不必填写所有人物，不填的使用默认值
       speakers: [ ] # 也可以不填
-
 
 # 百度翻译开放平台 api配置
 # api接入文档 https://api.fanyi.baidu.com/doc/21
