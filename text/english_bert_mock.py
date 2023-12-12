@@ -1,4 +1,9 @@
+import sys
+
 import torch
+from transformers import DebertaV2Model, DebertaV2Tokenizer
+
+from config import config
 
 
 LOCAL_PATH = "./bert/deberta-v3-large"
