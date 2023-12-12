@@ -396,8 +396,13 @@ if __name__ == "__main__":
     ).to(device)
     _ = net_g.eval()
 
-
-    model_files = sorted([it for it in os.listdir(args.model_path) if it.endswith('.pth') and it[0] == "G"])
+    model_files = sorted(
+        [
+            it
+            for it in os.listdir(args.model_path)
+            if it.endswith(".pth") and it[0] == "G"
+        ]
+    )
 
     speaker_ids = hps.data.spk2id
     speakers = list(speaker_ids.keys())
@@ -410,9 +415,7 @@ if __name__ == "__main__":
                     placeholder="Input Text Here",
                     value="欢迎来到奇思妙想妙妙屋",
                 )
-                model_selector = gr.Dropdown(
-                choices=model_files, label="选择模型"
-                )
+                model_selector = gr.Dropdown(choices=model_files, label="选择模型")
                 speaker = gr.Dropdown(
                     choices=speakers, value=speakers[0], label="Speaker"
                 )

@@ -44,8 +44,8 @@ torch.backends.cuda.enable_mem_efficient_sdp(
 torch.backends.cuda.enable_math_sdp(True)
 global_step = 0
 
-os.environ['MASTER_ADDR'] = '127.0.0.1'
-os.environ['MASTER_PORT'] = '8880'
+os.environ["MASTER_ADDR"] = "127.0.0.1"
+os.environ["MASTER_PORT"] = "8880"
 # os.environ['WORLD_SIZE'] = '2'
 # os.environ['RANK'] = '0'
 
@@ -326,9 +326,15 @@ def train_and_evaluate(
     net_d.train()
     if net_dur_disc is not None:
         net_dur_disc.train()
-    
-    print("\033[31m总迭代次数:{},batch_sampler.lengths样本实际数量:{},train_loader.batch_sampler.total_size:{}\033[0m".format(len(train_loader),len(train_loader.batch_sampler.lengths),train_loader.batch_sampler.total_size))
-    
+
+    print(
+        "\033[31m总迭代次数:{},batch_sampler.lengths样本实际数量:{},train_loader.batch_sampler.total_size:{}\033[0m".format(
+            len(train_loader),
+            len(train_loader.batch_sampler.lengths),
+            train_loader.batch_sampler.total_size,
+        )
+    )
+
     # logger.warning("总迭代次数:{},batch_sampler.lengths样本实际数量:{},train_loader.batch_sampler.total_size:{}".format(len(train_loader),len(train_loader.batch_sampler.lengths),train_loader.batch_sampler.total_size))
     for batch_idx, (
         x,
@@ -345,7 +351,6 @@ def train_and_evaluate(
         en_bert,
         emo,
     ) in tqdm(enumerate(train_loader)):
-   
         if net_g.module.use_noise_scaled_mas:
             current_mas_noise_scale = (
                 net_g.module.mas_noise_scale_initial

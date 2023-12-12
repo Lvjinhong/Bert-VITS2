@@ -3,7 +3,6 @@ import os
 import click
 
 
-
 def process(ch_name, ch_language="ZH"):
     with open(out_file, "a", encoding="Utf-8") as wf:
         path = os.path.join(base_path, ch_name)
@@ -31,7 +30,7 @@ def main():
 if __name__ == "__main__":
     # 根据 raw 和 lab 文件 去得到转录文件列表
     Base = ""
-    base_path = os.path.join(Base,"raw")
-    out_file = os.path.join(Base,"filelists/genshin/genshin.list")
+    base_path = os.path.join(Base, "raw")
+    out_file = os.path.join(Base, "filelists/genshin/genshin.list")
 
     main()
