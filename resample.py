@@ -17,7 +17,6 @@ def process(item):
         soundfile.write(os.path.join(args.out_dir, speaker, wav_name), wav, sr)
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sr", type=int, default=44100, help="sampling rate")
@@ -29,15 +28,27 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     # processes = 8
-    
-    speaker_raw=set([speaker for speaker in os.listdir(args.in_dir) if os.path.isdir(os.path.join(args.in_dir,speaker))])
-    speaker_ds=set([speaker for speaker in os.listdir(args.in_dir) if os.path.isdir(os.path.join(args.out_dir,speaker))])
-    speakers=list(speaker_raw-speaker_ds)
-    # print("") 
+
+    speaker_raw = set(
+        [
+            speaker
+            for speaker in os.listdir(args.in_dir)
+            if os.path.isdir(os.path.join(args.in_dir, speaker))
+        ]
+    )
+    speaker_ds = set(
+        [
+            speaker
+            for speaker in os.listdir(args.in_dir)
+            if os.path.isdir(os.path.join(args.out_dir, speaker))
+        ]
+    )
+    speakers = list(speaker_raw - speaker_ds)
+    # print("")
     # s
     processes = cpu_count() - 2 if cpu_count() > 4 else 1
     pool = Pool(processes=processes)
-    
+
     for speaker in speakers:
         spk_dir = os.path.join(args.in_dir, speaker)
         if os.path.isdir(spk_dir):

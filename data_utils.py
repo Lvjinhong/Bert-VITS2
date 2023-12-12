@@ -303,8 +303,8 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
         self.lengths = dataset.lengths
         self.batch_size = batch_size
         self.boundaries = boundaries
-        #buckets中存放的是每个bucket中的样本的index，num_samples_per_bucket中存放的是每个bucket中的样本的数量 
-        #每个桶的样本数一定是batchsize的整数倍，目前buckets还是存放的实际数据的索引，可能后面iter的时候会重复填充（如果不够整数倍的话）
+        # buckets中存放的是每个bucket中的样本的index，num_samples_per_bucket中存放的是每个bucket中的样本的数量
+        # 每个桶的样本数一定是batchsize的整数倍，目前buckets还是存放的实际数据的索引，可能后面iter的时候会重复填充（如果不够整数倍的话）
         self.buckets, self.num_samples_per_bucket = self._create_buckets()
         self.total_size = sum(self.num_samples_per_bucket)
         self.num_samples = self.total_size // self.num_replicas
@@ -383,7 +383,7 @@ class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
             # subsample 划分子集 到每张卡上
             ids_bucket = ids_bucket[self.rank :: self.num_replicas]
 
-            # 对子集进行按照batchsize进行划分 
+            # 对子集进行按照batchsize进行划分
             for j in range(len(ids_bucket) // self.batch_size):
                 batch = [
                     bucket[idx]

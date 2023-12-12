@@ -1,10 +1,12 @@
-
 import os
 
-def batch_rename(source,output, name, start_id):
+
+def batch_rename(source, output, name, start_id):
     # 获取文件夹内的文件列表
     # files = sorted()
-    files=sorted(os.listdir(source),key=lambda x:int(x.split('_')[-1].split('.')[0]))
+    files = sorted(
+        os.listdir(source), key=lambda x: int(x.split("_")[-1].split(".")[0])
+    )
     for idx, filename in enumerate(files, start=start_id):
         # 构建新的文件名
         new_name = f"{name}_{idx}.wav"  # 假设文件是.txt格式，您可以根据需要修改
@@ -15,20 +17,24 @@ def batch_rename(source,output, name, start_id):
         os.rename(old_path, new_path)
         print(f"Renamed {filename} to {new_name}")
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    #这里如果不想改变目录，那么就先设置一个temp做中转站，因为不能直接在原目录下重命名
-    parser.add_argument( "--source", default="./raw/bakiMix")
-    parser.add_argument( "--output", default="./raw/temp")
-    args=parser.parse_args()
-    source=args.source
-    output=args.output
+    # 这里如果不想改变目录，那么就先设置一个temp做中转站，因为不能直接在原目录下重命名
+    parser.add_argument("--source", default="./raw/bakiMix")
+    parser.add_argument("--output", default="./raw/temp")
+    args = parser.parse_args()
+    source = args.source
+    output = args.output
     import re
-    
-    if (ns:=os.listdir(output)):
-        baseName=ns[0].split('.')[0].split('_')[0]
-        index=sorted(list(map(lambda x : int(x.split('.')[0].split('_')[1]),ns)),reverse=True)[0]
+
+    if ns := os.listdir(output):
+        baseName = ns[0].split(".")[0].split("_")[0]
+        index = sorted(
+            list(map(lambda x: int(x.split(".")[0].split("_")[1]), ns)), reverse=True
+        )[0]
         print(f"目标路径已存在文件，查询到baseName为{baseName},index为{index}")
     else:
         print("目标路径为空，请手动输入baseName和index")
@@ -36,4 +42,4 @@ if __name__ == "__main__":
         index = int(input("Enter the starting id: "))
         pass
 
-    batch_rename(source,output, baseName, index+1)
+    batch_rename(source, output, baseName, index + 1)

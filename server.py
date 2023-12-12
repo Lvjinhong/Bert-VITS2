@@ -188,7 +188,7 @@ def main():
         noise = float(request.args.get("noise", 0.5))
         noisew = float(request.args.get("noisew", 0.6))
         length = float(request.args.get("length", 1.2))
-        language = request.args.get("language","ZH")
+        language = request.args.get("language", "ZH")
         if length >= 2:
             return "Too big length"
         if len(text) >= 250:

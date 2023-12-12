@@ -11,14 +11,16 @@ from text.cleaner import clean_text
 
 @click.command()
 @click.option(
-    "-tp","--transcription-path",
+    "-tp",
+    "--transcription-path",
     default=f"./filelists/genshin_mix/genshin_out.txt",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
 )
-@click.option("-cp","--cleaned-path", default=None)
+@click.option("-cp", "--cleaned-path", default=None)
 @click.option("--train-name", default=f"train.list")
 @click.option("--val-name", default=f"val.list")
-@click.option("-cp",
+@click.option(
+    "-cp",
     "--config-path",
     default="configs/config.json",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
@@ -36,9 +38,9 @@ def main(
     max_val_total: int,
     clean: bool,
 ):
-    base_path=os.path.join(*transcription_path.split('/')[:-1])
-    train_path=os.path.join(base_path,train_name)  
-    val_path=os.path.join(base_path,val_name)
+    base_path = os.path.join(*transcription_path.split("/")[:-1])
+    train_path = os.path.join(base_path, train_name)
+    val_path = os.path.join(base_path, val_name)
     if cleaned_path is None:
         cleaned_path = transcription_path + ".cleaned"
 
@@ -115,7 +117,7 @@ def main(
 
     config = json.load(open(config_path, encoding="utf-8"))
     config["data"]["spk2id"] = spk_id_map
-    
+
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
