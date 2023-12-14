@@ -18,7 +18,13 @@ class DynamicConfig:
             else:
                 # 直接设置属性
                 setattr(self, key, value)
-
+    def __getitem__(self, item):
+        try:
+            return getattr(self, item)
+        except AttributeError:
+            raise KeyError(f"Config item '{item}' not found")
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
     def __repr__(self):
         return str({k: v for k, v in self.__dict__.items()})
 
@@ -262,4 +268,4 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-y", "--yml_config", type=str, default="config.yml")
 args, _ = parser.parse_known_args()
 config = Config(args.yml_config)
-print(config.mypreprocess_config)
+# print(config.mypreprocess_config.autoLable_config)
