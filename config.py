@@ -207,7 +207,6 @@ class Server_config:
 
 class Translate_config:
     """翻译api配置"""
-
     def __init__(self, app_key: str, secret_key: str):
         self.app_key = app_key
         self.secret_key = secret_key

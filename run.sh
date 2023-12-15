@@ -16,6 +16,7 @@ if [ $go -eq 1 ]
 then
     echo -----------------生成bert文件--------------------
     # python bert_gen.py -c ./configs/config_c1.json 
+    # clap_gen.py
     echo -----------------开始训练-----------------
     python train_ms.py -m c1 -c ./configs/config_c1.json 
     echo -----------------训练结束-----------------
