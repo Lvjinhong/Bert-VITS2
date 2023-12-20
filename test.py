@@ -1,13 +1,7 @@
-import numpy as np
 
 
-
-t=np.arange(49)
-t.resize(7,7)
-t
-t[[1,3],[2,4]]
-
-ax=np.array([1,3])
-ax.resize(2,1)
-t[ax,]
-t[ax,:]
+from transformers import ClapModel, ClapProcessor
+#单独下载下来，解决clap wraaper中模型在本地找不到的问题
+processor = ClapProcessor.from_pretrained("laion/clap-htsat-fused",cache_dir="./emotional")
+ClapModel.from_pretrained("laion/clap-htsat-fused",cache_dir="./emotional")
+print(processor)
