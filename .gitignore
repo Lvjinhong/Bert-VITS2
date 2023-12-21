@@ -170,6 +170,7 @@ data/*
 !/default_config.yml
 /Web/
 /emotional/*/*.bin
+/slm/*/*.bin
 /bert/*/*.bin
 /bert/*/*.h5
 /bert/*/*.model
@@ -189,3 +190,5 @@ Model/
 raw/
 dataset/
 emotional
+/onnx
+/.vs
